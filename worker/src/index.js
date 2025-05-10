@@ -1,7 +1,7 @@
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === '/proxies.json') {
       const data = await env.PROXIES.get('list') || '[]';
@@ -9,8 +9,14 @@ export default {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    // 静态资源
-    return await getAssetFromKV(request);
+    // 静态资源，增加 ctx 及错误捕获
+    try {
+      return await getAssetFromKV(request, env, ctx);
+    } catch (e) {
+      console.error('Asset handler error:', e);
+      // 回退到直接 fetch 请求
+      return fetch(request);
+    }
   },
 
   async scheduled(event, env, ctx) {
