@@ -1,0 +1,18 @@
+name = "proxy-worker"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# 指定 Worker 类型
+type = "javascript"
+
+# 发布静态站点的目录
+site = { bucket = "./public" }
+
+# 定时任务，每5分钟触发一次
+[triggers]
+crons = ["*/5 * * * *"]
+
+# KV 命名空间绑定，用于存储代理列表
+[[kv_namespaces]]
+binding = "PROXIES"
+id = "<YOUR_KV_NAMESPACE_ID>" 
