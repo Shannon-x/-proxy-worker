@@ -46,7 +46,8 @@ class RegionAPIRateLimiter:
             return True
 
 # 初始化配置 (与原脚本保持一致)
-ua = UserAgent()
+# 使用 fallback UA，避免 fake-useragent 在 CI 环境下加载失败
+ua = UserAgent(fallback='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36')
 SITE_CONFIGS = {
 	'proxy_scdn': {
 		'url': 'https://proxy.scdn.io/text.php',
