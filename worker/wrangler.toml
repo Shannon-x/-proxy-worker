@@ -1,5 +1,5 @@
 name = "proxy-worker"
-type = "javascript"
+main = "src/index.js"
 workers_dev = true
 compatibility_date = "2025-01-01"
 account_id = "7a4081a2d83d3f43fe6b1be1c926fd1c"
@@ -21,6 +21,4 @@ id = "35adf28c6d4c4a5d9d6c8440611f6efa"
 binding = "__STATIC_CONTENT"
 id = "35adf28c6d4c4a5d9d6c8440611f6efa"
 
-# 构建设置，上传模块格式
-[build]
-upload_format = "modules"
+# 已移除不支持的字段
