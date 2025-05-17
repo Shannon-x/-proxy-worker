@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
-import json
 import os
+import json
 from proxy_scraper import scrape_and_validate
 
 async def main():
