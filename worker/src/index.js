@@ -9,8 +9,7 @@ export default {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    // 静态资源，增加根路径映射到 index.html
-    // 构造事件对象供 getAssetFromKV 使用
+    // 静态资源处理，根路径映射到 index.html
     const event = { request, env, waitUntil: ctx.waitUntil };
     try {
       return await getAssetFromKV(event, {
@@ -24,7 +23,7 @@ export default {
       });
     } catch (e) {
       console.error('Asset handler error:', e);
-      return fetch(request);
+      return new Response('Not found', { status: 404 });
     }
   },
 
