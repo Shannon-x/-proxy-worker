@@ -576,9 +576,9 @@ async def main_async():
 
         # 步骤 3: 询问用户需要多少代理
         while True:
-            input_num_str = input(f"请输入你需要的代理数量 (可用: {len(unique_proxies_list)}, 直接回车代表全部): ").strip()
-            if input_num_str == '':
-                selected_proxies_for_processing = unique_proxies_list
+            input_num_str = input(f"请输入你需要的代理数量 (可用: {len(unique_proxies_list)}, 直接回车代表全部): ")
+
+
                 break
             try:
                 num_to_select = int(input_num_str)
@@ -718,6 +718,22 @@ async def scrape_and_validate():
                 print(f"验证时出错: {res}")
             elif res and res.get('validated_ok'):
                 valid.append(res)
+
+    # 执行完代理验证后进行地区检测
+    from proxy_scraper import RegionAPIRateLimiter, detect_region_async
+    rate_limiter = RegionAPIRateLimiter(REGION_API_QPS)
+    async with aiohttp.ClientSession() as region_session:
+        region_tasks = [
+            asyncio.create_task(detect_region_async(region_session, p['ip'], rate_limiter))
+            for p in valid
+        ]
+        regions = await asyncio.gather(*region_tasks, return_exceptions=True)
+        for p, region in zip(valid, regions):
+            if not isinstance(region, Exception):
+                p['region'] = region
+            else:
+                p['region'] = '未知'
+    
     return valid
 
 # 程序入口

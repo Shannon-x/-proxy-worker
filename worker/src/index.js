@@ -9,34 +9,51 @@ export default {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    // 静态资源，增加 ctx 及错误捕获
+    // 静态资源，增加根路径映射到 index.html
+    // 构造事件对象供 getAssetFromKV 使用
+    const event = { request, env, waitUntil: ctx.waitUntil };
     try {
-      return await getAssetFromKV(request, env, ctx);
+      return await getAssetFromKV(event, {
+        mapRequestToAsset: (req) => {
+          const parsedURL = new URL(req.url);
+          if (parsedURL.pathname === '/') {
+            parsedURL.pathname = '/index.html';
+          }
+          return new Request(parsedURL.toString(), req);
+        }
+      });
     } catch (e) {
       console.error('Asset handler error:', e);
-      // 回退到直接 fetch 请求
       return fetch(request);
     }
   },
 
   async scheduled(event, env, ctx) {
-    // 定时触发抓取
     ctx.waitUntil(fetchAndStore(env));
   }
 };
 
-// 从 Proxyscrape 拉取代理列表并存入 KV
+// 从 Proxyscrape 拉取 HTTP、SOCKS4、SOCKS5 代理列表并存入 KV
 async function fetchAndStore(env) {
-  const res = await fetch(
-    'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all'
-  );
-  const text = await res.text();
-  const list = text
-    .split('\n')
-    .filter(line => line.includes(':'))
-    .map(line => {
-      const [ip, port] = line.trim().split(':');
-      return { ip, port, type: 'HTTP', https: '待检测', region: '' };
-    });
+  const protocols = [
+    { protocol: 'http', type: 'HTTP' },
+    { protocol: 'socks4', type: 'SOCKS4' },
+    { protocol: 'socks5', type: 'SOCKS5' },
+  ];
+  let list = [];
+  for (const p of protocols) {
+    const res = await fetch(
+      `https://api.proxyscrape.com/v2/?request=getproxies&protocol=${p.protocol}&timeout=10000&country=all&ssl=all&anonymity=all`
+    );
+    const text = await res.text();
+    const arr = text
+      .split('\n')
+      .filter(line => line.includes(':'))
+      .map(line => {
+        const [ip, port] = line.trim().split(':');
+        return { ip, port, type: p.type, https: '待检测', region: '' };
+      });
+    list = list.concat(arr);
+  }
   await env.PROXIES.put('list', JSON.stringify(list));
-} 
+}

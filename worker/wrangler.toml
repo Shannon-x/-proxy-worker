@@ -13,4 +13,9 @@ crons = ["*/5 * * * *"]
 # KV 命名空间绑定，用于存储代理列表
 [[kv_namespaces]]
 binding = "PROXIES"
-id = "35adf28c6d4c4a5d9d6c8440611f6efa" 
+id = "35adf28c6d4c4a5d9d6c8440611f6efa"
+
+# KV 命名空间绑定，用于存储静态资源
+[[kv_namespaces]]
+binding = "__STATIC_CONTENT"
+id = "<请替换为静态资源命名空间 ID>"
