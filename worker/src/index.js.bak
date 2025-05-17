@@ -28,9 +28,24 @@ async function serveStaticAsset(request, env) {
   const contentType = contentTypeMap[ext] || 'text/plain';
   
   try {
+    // 尝试获取静态资源
+    // 首先尝试从KV中获取
+    if (env.__STATIC_CONTENT) {
+      try {
+        const asset = await getAssetFromKV(
+          { request, env: { __STATIC_CONTENT: env.__STATIC_CONTENT } },
+          { mapRequestToAsset: req => new Request(new URL(path, req.url), req) }
+        );
+        return asset;
+      } catch (e) {
+        console.error('从KV获取静态资源失败:', e);
+        // 继续尝试下一种方法
+      }
+    }
+    
     // 如果是常见请求，返回预定义的响应
     if (path === '/index.html' || path === '/') {
-      // index.html内容 - 使用简化版
+      // index.html内容
       const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -42,8 +57,24 @@ async function serveStaticAsset(request, env) {
 <body>
 <div class="container mt-5">
     <h1 class="mb-4">有效代理列表</h1>
-    <div class="alert alert-info">
-        正在加载代理数据，请稍候...
+    <!-- 筛选和导出控件 -->
+    <div class="row mb-3">
+      <div class="col">
+        <input type="text" id="search-input" placeholder="搜索 IP 或 地区" class="form-control" />
+      </div>
+      <div class="col">
+        <select id="filter-region" class="form-select">
+          <option value="">全部地区</option>
+        </select>
+      </div>
+      <div class="col">
+        <select id="filter-type" class="form-select">
+          <option value="">全部类型</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button id="export-btn" class="btn btn-primary">导出CSV</button>
+      </div>
     </div>
     <table class="table table-striped" id="proxy-table">
         <thead>
@@ -57,61 +88,15 @@ async function serveStaticAsset(request, env) {
         </thead>
         <tbody></tbody>
     </table>
+    <!-- 分页控件 -->
+    <nav>
+        <ul class="pagination justify-content-center" id="pagination"></ul>
+    </nav>
 </div>
 <script>
-    // 简化版JS代码，直接嵌入
-    let proxies = [];
-    
-    async function loadProxies() {
-        try {
-            const response = await fetch('/proxies.json');
-            if (!response.ok) {
-                document.querySelector('.alert').textContent = '加载失败: ' + response.status;
-                document.querySelector('.alert').className = 'alert alert-danger';
-                return;
-            }
-            
-            const data = await response.json();
-            if (data.error) {
-                document.querySelector('.alert').textContent = '错误: ' + (data.message || data.error);
-                document.querySelector('.alert').className = 'alert alert-danger';
-                return;
-            }
-            
-            proxies = Array.isArray(data) ? data : [];
-            
-            if (proxies.length === 0) {
-                document.querySelector('.alert').textContent = '暂无代理数据';
-                return;
-            }
-            
-            document.querySelector('.alert').style.display = 'none';
-            
-            const tbody = document.querySelector('#proxy-table tbody');
-            tbody.innerHTML = '';
-            
-            proxies.slice(0, 20).forEach(p => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = \`
-                    <td>\${p.ip}</td>
-                    <td>\${p.port}</td>
-                    <td>\${p.type || '-'}</td>
-                    <td>\${p.https || '-'}</td>
-                    <td>\${p.region || '-'}</td>
-                \`;
-                tbody.appendChild(tr);
-            });
-        } catch (err) {
-            console.error('加载代理失败:', err);
-            document.querySelector('.alert').textContent = '加载失败: ' + err.message;
-            document.querySelector('.alert').className = 'alert alert-danger';
-        }
-    }
-
     document.addEventListener('DOMContentLoaded', function() {
         loadProxies();
-        // 每60秒刷新一次
-        setInterval(loadProxies, 60000);
+        setInterval(loadProxies, 60000); // 每60秒刷新一次
     });
 </script>
 </body>
@@ -125,8 +110,15 @@ async function serveStaticAsset(request, env) {
     }
     
     if (path === '/static/js/main.js') {
-      // 返回一个简化版的JS代码
-      const js = `let proxies = [];
+      // 使用实际的main.js内容
+      // 这只是一个备选措施，在正常部署时应该不会用到这段代码
+      return fetch('https://cdn.jsdelivr.net/gh/your-username/proxy-worker/worker/public/static/js/main.js')
+        .then(resp => new Response(resp.body, {
+          headers: { 'Content-Type': 'application/javascript' }
+        }))
+        .catch(() => {
+          // 如果远程获取失败，返回一个简化版的代码
+          const js = `let proxies = [];
 let filtered = [];
 let currentPage = 1;
 const pageSize = 20;
@@ -177,15 +169,16 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProxies();
     setInterval(loadProxies, 60000);
 });`;
-      return new Response(js, {
-        headers: { 'Content-Type': 'application/javascript' }
-      });
+          return new Response(js, {
+            headers: { 'Content-Type': 'application/javascript' }
+          });
+        });
     }
     
     // 对于其他文件，返回404
     return new Response('Not Found', { status: 404 });
   } catch (e) {
-    return new Response(`静态资源错误: ${e.message}`, { status: 500 });
+    return new Response(`Static asset error: ${e.message}`, { status: 500 });
   }
 }
 
@@ -205,10 +198,7 @@ export default {
           // 确保 proxyworker KV 命名空间存在并正确绑定
           if (!env.proxyworker) {
             console.error('proxyworker KV 命名空间未绑定!');
-            return new Response(JSON.stringify({ 
-              error: 'KV存储未配置', 
-              message: '系统暂时无法提供代理数据' 
-            }), {
+            return new Response(JSON.stringify({ error: 'KV存储未配置', message: '系统暂时无法提供代理数据' }), {
               status: 503,
               headers: {
                 'Content-Type': 'application/json',
@@ -218,29 +208,14 @@ export default {
             });
           }
           
-          // 尝试从KV获取数据
-          try {
-            const data = await env.proxyworker.get('list');
-            return new Response(data || '[]', {
-              headers: { 
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Access-Control-Allow-Origin': '*'
-              }
-            });
-          } catch (kvError) {
-            console.error('从KV读取数据失败:', kvError);
-            return new Response(JSON.stringify({ 
-              error: 'KV读取失败', 
-              message: '无法从KV存储读取数据: ' + kvError.message 
-            }), {
-              status: 500,
-              headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-              }
-            });
-          }
+          const data = await env.proxyworker.get('list');
+          return new Response(data || '[]', {
+            headers: { 
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Access-Control-Allow-Origin': '*'
+            }
+          });
         } catch (err) {
           console.error('获取代理数据出错:', err);
           return new Response(JSON.stringify({ error: err.message }), {
@@ -253,9 +228,8 @@ export default {
         }
       }
       
-      // 尝试使用getAssetFromKV获取资源
+      // 尝试使用getAssetFromKV获取资源，如果失败就使用备用方法
       try {
-        // 首先尝试标准方式获取
         return await getAssetFromKV(
           {
             request,
@@ -265,45 +239,37 @@ export default {
           {
             mapRequestToAsset: (req) => {
               const parsedUrl = new URL(req.url);
+              // 根路径映射到index.html
               if (parsedUrl.pathname === '/') {
                 parsedUrl.pathname = '/index.html';
               }
               return new Request(parsedUrl.toString(), req);
+            },
+            cacheControl: {
+              bypassCache: true
             }
           }
         );
       } catch (e) {
-        console.log('getAssetFromKV失败:', e);
-        
-        // 尝试使用明确的KV命名空间
-        try {
-          if (env.__STATIC_CONTENT) {
-            return await getAssetFromKV(
-              {
-                request,
-                waitUntil: ctx.waitUntil.bind(ctx),
-                env: { __STATIC_CONTENT: env.__STATIC_CONTENT }
-              }, 
-              {
-                mapRequestToAsset: (req) => {
-                  const parsedUrl = new URL(req.url);
-                  if (parsedUrl.pathname === '/') {
-                    parsedUrl.pathname = '/index.html';
-                  }
-                  return new Request(parsedUrl.toString(), req);
-                }
-              }
-            );
-          }
-        } catch (e2) {
-          console.log('第二次getAssetFromKV失败:', e2);
-        }
-        
-        // 最后使用备用方法
+        console.log('getAssetFromKV 失败, 尝试备用方法:', e);
         return await serveStaticAsset(request, env);
       }
+        {
+          mapRequestToAsset: (req) => {
+            const parsedUrl = new URL(req.url);
+            // 根路径映射到index.html
+            if (parsedUrl.pathname === '/') {
+              parsedUrl.pathname = '/index.html';
+            }
+            return new Request(parsedUrl.toString(), req);
+          },
+          cacheControl: {
+            bypassCache: true
+          }
+        }
+      );
     } catch (e) {
-      console.error('Worker全局错误:', e);
+      console.error('Worker错误:', e);
       return new Response(`服务错误: ${e.message}`, { 
         status: 500,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' }
@@ -339,7 +305,6 @@ async function fetchAndStore(env) {
       const existingData = await env.proxyworker.get('list');
       if (existingData) {
         existingProxies = JSON.parse(existingData);
-        console.log(`成功获取现有代理列表，共${existingProxies.length}个代理`);
       }
     } catch (e) {
       console.error('读取现有代理失败:', e);
@@ -370,7 +335,6 @@ async function fetchAndStore(env) {
             };
           });
         
-        console.log(`成功获取${p.type}代理，共${arr.length}个`);
         list = list.concat(arr);
       } catch (e) {
         console.error(`获取${p.type}代理时出错:`, e);
@@ -383,15 +347,9 @@ async function fetchAndStore(env) {
       return;
     }
     
-    console.log(`准备存储代理列表，共${list.length}个代理`);
-    
     // 将代理IP列表存入KV
-    try {
-      await env.proxyworker.put('list', JSON.stringify(list));
-      console.log(`成功更新代理列表，共${list.length}个代理`);
-    } catch (kvError) {
-      console.error('存储代理列表到KV时出错:', kvError);
-    }
+    await env.proxyworker.put('list', JSON.stringify(list));
+    console.log(`成功更新代理列表，共${list.length}个代理`);
   } catch (err) {
     console.error('获取代理列表失败:', err);
   }

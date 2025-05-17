@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2025-01-01"
 account_id = "7a4081a2d83d3f43fe6b1be1c926fd1c"
 
-# 正确配置静态资源目录
+# 静态资源配置 - 使用更明确的格式
 [site]
 bucket = "./public"
 
