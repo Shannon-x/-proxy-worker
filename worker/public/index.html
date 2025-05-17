@@ -9,8 +9,25 @@
 <body>
 <div class="container mt-5">
     <h1 class="mb-4">有效代理列表</h1>
-    <!-- 搜索框 -->
-    <input type="text" id="search-input" placeholder="搜索 IP 或 地区" class="form-control mb-3" />
+    <!-- 筛选和导出控件 -->
+    <div class="row mb-3">
+      <div class="col">
+        <input type="text" id="search-input" placeholder="搜索 IP 或 地区" class="form-control" />
+      </div>
+      <div class="col">
+        <select id="filter-region" class="form-select">
+          <option value="">全部地区</option>
+        </select>
+      </div>
+      <div class="col">
+        <select id="filter-type" class="form-select">
+          <option value="">全部类型</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button id="export-btn" class="btn btn-primary">导出CSV</button>
+      </div>
+    </div>
     <table class="table table-striped" id="proxy-table">
         <thead>
             <tr>
