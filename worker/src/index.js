@@ -1,28 +1,25 @@
-// 不再使用 `kv-asset-handler`，改用 `env.__STATIC_CONTENT` 内置绑定
+import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
  
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    // JSON 数据接口
+    if (url.pathname === '/proxies.json') {
+      const data = await env.PROXIES.get('list') || '[]';
+      return new Response(data, { headers: { 'Content-Type': 'application/json' } });
+    }
     try {
-      const url = new URL(request.url);
-      // JSON 数据接口
-      if (url.pathname === '/proxies.json') {
-        const data = await env.PROXIES.get('list') || '[]';
-        return new Response(data, { 'headers': { 'Content-Type': 'application/json' } });
-      }
-      // 忽略 favicon
-      if (url.pathname === '/favicon.ico') {
-        return new Response(null, { status: 204 });
-      }
-      // 根路径映射到 index.html
-      const path = url.pathname === '/' ? '/index.html' : url.pathname;
-      // 构造静态资源请求
-      const assetURL = new URL(path, request.url);
-      const assetRequest = new Request(assetURL.toString(), request);
-      // 返回静态资源
-      return await __STATIC_CONTENT.fetch(assetRequest);
-    } catch (err) {
-      console.error('Worker fetch error:', err);
-      return new Response('Internal Server Error', { status: 500 });
+      // 使用 getAssetFromKV 处理静态资源，并将根路径映射到 index.html
+      return await getAssetFromKV({ request, env, ctx }, {
+        mapRequestToAsset: (req) => {
+          const assetUrl = new URL(req.url);
+          if (assetUrl.pathname === '/') assetUrl.pathname = '/index.html';
+          return new Request(assetUrl.toString(), req);
+        }
+      });
+    } catch (e) {
+      // 资源未找到时返回 404
+      return new Response('Not found', { status: 404 });
     }
   },
 
