@@ -2,23 +2,28 @@
  
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    // JSON 数据接口
-    if (url.pathname === '/proxies.json') {
-      const data = await env.PROXIES.get('list') || '[]';
-      return new Response(data, { 'headers': { 'Content-Type': 'application/json' } });
+    try {
+      const url = new URL(request.url);
+      // JSON 数据接口
+      if (url.pathname === '/proxies.json') {
+        const data = await env.PROXIES.get('list') || '[]';
+        return new Response(data, { 'headers': { 'Content-Type': 'application/json' } });
+      }
+      // 忽略 favicon
+      if (url.pathname === '/favicon.ico') {
+        return new Response(null, { status: 204 });
+      }
+      // 根路径映射到 index.html
+      const path = url.pathname === '/' ? '/index.html' : url.pathname;
+      // 构造静态资源请求
+      const assetURL = new URL(path, request.url);
+      const assetRequest = new Request(assetURL.toString(), request);
+      // 返回静态资源
+      return await __STATIC_CONTENT.fetch(assetRequest);
+    } catch (err) {
+      console.error('Worker fetch error:', err);
+      return new Response('Internal Server Error', { status: 500 });
     }
-    // 忽略 favicon
-    if (url.pathname === '/favicon.ico') {
-      return new Response(null, { status: 204 });
-    }
-    // 根路径映射到 index.html
-    const path = url.pathname === '/' ? '/index.html' : url.pathname;
-    // 构造静态资源请求
-    const assetURL = new URL(path, request.url);
-    const assetRequest = new Request(assetURL.toString(), request);
-    // 返回静态资源
-    return await env.__STATIC_CONTENT.fetch(assetRequest);
   },
 
   async scheduled(event, env, ctx) {
