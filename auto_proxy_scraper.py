@@ -139,20 +139,60 @@ async def detect_region_async(session, ip, rate_limiter):
     await rate_limiter.acquire()
     
     max_retries = 3
-    api_url = f"https://apimobile.meituan.com/locate/v2/ip/loc?rgeo=true&ip={ip}"
     
-    for retry in range(max_retries):
-        try:
-            async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
-                response.raise_for_status()
-                resp = await response.text()
-                rgeo = json.loads(resp).get('data', {}).get('rgeo', {})
-                return f"{rgeo.get('country', '未知')}/{rgeo.get('province', '未知')}/{rgeo.get('city', '未知')}"
-        except Exception as e:
-            print(f"检测 IP {ip} 地区信息失败 (尝试 {retry + 1}/{max_retries}): {e}")
-            if retry < max_retries - 1:
-                await asyncio.sleep(1)  # 稍作等待后重试
+    # 使用多个API源以提高成功率
+    api_urls = [
+        f"https://apimobile.meituan.com/locate/v2/ip/loc?rgeo=true&ip={ip}",   # 美团API
+        f"https://ip.useragentinfo.com/json?ip={ip}",                           # 备用API 1
+        f"https://ip.zxinc.org/api.php?type=json&ip={ip}"                       # 备用API 2
+    ]
     
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+    ]
+    
+    for api_url in api_urls:
+        for retry in range(max_retries):
+            try:
+                # 随机选择User-Agent
+                headers = {
+                    'User-Agent': user_agents[retry % len(user_agents)],
+                    'Accept': 'application/json',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+                }
+                
+                async with session.get(api_url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                    if response.status != 200:
+                        print(f"API错误: {response.status} - {api_url}")
+                        continue
+                        
+                    resp = await response.text()
+                    result = json.loads(resp)
+                    
+                    # 针对不同API的解析逻辑
+                    if "meituan.com" in api_url:
+                        rgeo = result.get('data', {}).get('rgeo', {})
+                        if rgeo:
+                            return f"{rgeo.get('country', '未知')}/{rgeo.get('province', '未知')}/{rgeo.get('city', '未知')}"
+                    elif "useragentinfo.com" in api_url:
+                        if result.get('country') and result.get('province'):
+                            return f"{result.get('country')}/{result.get('province')}/{result.get('city', '未知')}"
+                    elif "zxinc.org" in api_url:
+                        if result.get('code') == 0 and result.get('data'):
+                            data = result.get('data')
+                            return f"{data.get('country', '未知')}/{data.get('region', '未知')}/{data.get('city', '未知')}"
+                    
+                    # 如果没有成功解析，则继续尝试
+                    print(f"无法从API解析地区数据: {api_url}")
+                    
+            except Exception as e:
+                print(f"检测 IP {ip} 地区信息失败 (API: {api_url}, 尝试 {retry + 1}/{max_retries}): {e}")
+                if retry < max_retries - 1:
+                    await asyncio.sleep(1)  # 稍作等待后重试
+    
+    # 所有API都失败了，返回未知
     return "未知"
 
 # 异步函数：检测代理类型和HTTPS支持

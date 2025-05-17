@@ -322,7 +322,7 @@ export default {
   }
 };
 
-// 从 Proxyscrape 拉取 HTTP、SOCKS4、SOCKS5 代理列表并存入 KV
+// 从本地 proxies.json 文件或备用API获取代理列表并存入 KV
 async function fetchAndStore(env) {
   try {
     // 首先检查 KV 绑定是否存在
@@ -331,57 +331,92 @@ async function fetchAndStore(env) {
       return;
     }
     
-    // 尝试从本地文件读取代理列表
-    try {
-      const proxiesJson = await fetch('https://raw.githubusercontent.com/username/proxy-worker/main/worker/public/proxies.json')
-        .catch(() => fetch('https://proxy-worker.pages.dev/proxies.json'))
-        .catch(() => null);
-      
-      if (proxiesJson && proxiesJson.ok) {
-        const proxyData = await proxiesJson.text();
-        if (proxyData) {
-          try {
-            // 解析JSON确保格式正确
-            const proxies = JSON.parse(proxyData);
-            
-            // 确认是数组且至少有一项
-            if (Array.isArray(proxies) && proxies.length > 0) {
-              // 存入KV
-              await env.proxyworker.put('list', JSON.stringify(proxies));
-              console.log(`成功从远程文件更新代理列表，共${proxies.length}个代理`);
-              return;
-            }
-          } catch (jsonError) {
-            console.error('解析代理JSON时出错:', jsonError);
-          }
-        }
-      }
-    } catch (fetchError) {
-      console.error('获取远程代理文件失败:', fetchError);
-    }
+    console.log('开始读取最新代理数据...');
     
-    // 尝试获取现有代理列表
+    // 获取代理数据的优先级：
+    // 1. 当前Worker域名下的proxies.json（动态更新的最新数据）
+    // 2. 备用的公共API
+    
+    // 读取现有 KV 数据作为备份
     let existingProxies = [];
+    let existingData;
     try {
-      const existingData = await env.proxyworker.get('list');
+      existingData = await env.proxyworker.get('list');
       if (existingData) {
         existingProxies = JSON.parse(existingData);
-        console.log(`成功获取KV中的现有代理列表，共${existingProxies.length}个代理`);
-        if (existingProxies.length > 0) {
-          // 如果距离上次更新不到6小时且有足够的代理，则跳过本次更新
-          const now = new Date().getTime();
-          const lastCheck = existingProxies[0].last_check ? new Date(existingProxies[0].last_check).getTime() : 0;
-          if (now - lastCheck < 6 * 60 * 60 * 1000 && existingProxies.length > 50) {
-            console.log(`上次更新时间距离现在不到6小时，且有${existingProxies.length}个代理，跳过更新`);
-            return;
-          }
-        }
+        console.log(`成功获取现有代理列表作为备份，共 ${existingProxies.length} 个`);
       }
     } catch (e) {
-      console.error('读取现有代理失败:', e);
+      console.error('读取现有代理列表失败:', e);
     }
     
-    // 备用方法：直接从代理API获取
+    // 获取Worker自身的域名
+    const requestUrl = new URL(env.__STATIC_CONTENT_MANIFEST || '');
+    let baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
+    
+    // 如果不能有效获取域名，尝试从环境变量或其他途径获取
+    if (!baseUrl || baseUrl === '//') {
+      // 尝试从Cloudflare环境变量中获取
+      try {
+        const cfEnv = env.CF_PAGES_URL || env.CF_WORKER_DOMAIN || 'https://proxy-worker.your-domain.workers.dev';
+        baseUrl = new URL(cfEnv).origin;
+      } catch (e) {
+        baseUrl = 'https://proxy-worker.your-domain.workers.dev';
+      }
+    }
+      
+    console.log(`尝试从 ${baseUrl}/proxies.json 获取最新代理数据...`);
+    
+    try {
+      // 添加时间戳和随机数，强制绕过任何缓存
+      const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
+      const proxyDataResp = await fetch(`${baseUrl}/proxies.json${cacheBuster}`, {
+        cf: { cacheTtl: 0 }, // 禁用CF缓存
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (proxyDataResp.ok) {
+        console.log('成功获取代理数据文件');
+        const proxyData = await proxyDataResp.text();
+        
+        try {
+          // 解析并验证数据
+          const proxies = JSON.parse(proxyData);
+          if (Array.isArray(proxies) && proxies.length > 0) {
+            // 过滤有效的代理（具有完整字段的代理）
+            const validProxies = proxies.filter(p => 
+              p && p.ip && p.port && p.type && p.https
+            );
+            
+            // 有效的代理数据，更新到 KV
+            await env.proxyworker.put('list', JSON.stringify(validProxies));
+            console.log(`成功更新代理列表，共 ${validProxies.length} 个有效代理`);
+            return;
+          } else {
+            console.log('文件中的代理数据为空或格式无效');
+          }
+        } catch (parseErr) {
+          console.error('解析代理数据失败:', parseErr);
+        }
+      } else {
+        console.log(`无法获取代理数据文件: ${proxyDataResp.status} ${proxyDataResp.statusText}`);
+      }
+    } catch (fetchErr) {
+      console.error('获取代理数据文件失败:', fetchErr);
+    }
+    
+    // 如果最新数据更新失败，但已有数据不为空，保留现有数据
+    if (existingProxies.length > 0) {
+      console.log(`无法获取最新代理数据，保留现有数据（${existingProxies.length}个代理）`);
+      return;
+    }
+    
+    // 最后的备用方案：直接从代理API获取
+    console.log('尝试从多个代理API直接获取代理...');
     const protocols = [
       { protocol: 'http', type: 'HTTP' },
       { protocol: 'socks4', type: 'SOCKS4' },
@@ -391,50 +426,73 @@ async function fetchAndStore(env) {
     
     for (const p of protocols) {
       try {
-        const res = await fetch(
-          `https://api.proxyscrape.com/v2/?request=getproxies&protocol=${p.protocol}&timeout=10000&country=all&ssl=all&anonymity=all`
-        );
-        if (!res.ok) {
-          console.error(`获取${p.type}代理失败: ${res.status}`);
-          continue;
+        // 尝试不同的API源以增加获取成功的概率
+        const apiSources = [
+          `https://api.proxyscrape.com/v2/?request=getproxies&protocol=${p.protocol}&timeout=10000&country=all&ssl=all&anonymity=all`,
+          `https://www.proxy-list.download/api/v1/get?type=${p.protocol.toUpperCase()}`
+        ];
+        
+        for (const apiUrl of apiSources) {
+          try {
+            const res = await fetch(apiUrl, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+            });
+            
+            if (!res.ok) {
+              console.error(`从 ${apiUrl} 获取${p.type}代理失败: ${res.status}`);
+              continue;
+            }
+            
+            const text = await res.text();
+            // 确保文本内容不为空且包含IP:PORT格式
+            if (!text || !text.includes(':')) {
+              console.error(`从 ${apiUrl} 获取的内容无效，不包含代理数据`);
+              continue;
+            }
+            
+            const arr = text.split('\n')
+              .filter(line => line.includes(':'))
+              .map(line => {
+                const [ip, port] = line.trim().split(':');
+                return { 
+                  ip, 
+                  port, 
+                  type: p.type, 
+                  https: '待检测', 
+                  region: '未检测',
+                  last_check: new Date().toISOString(),
+                  validated: true
+                };
+              });
+            
+            if (arr.length > 0) {
+              console.log(`成功从 ${apiUrl} 获取${p.type}代理，共${arr.length}个`);
+              list = list.concat(arr);
+              // 获取成功后跳出当前API源循环
+              break;
+            }
+          } catch (e) {
+            console.error(`从 ${apiUrl} 获取${p.type}代理时出错:`, e);
+          }
         }
-        
-        const text = await res.text();
-        const arr = text.split('\n')
-          .filter(line => line.includes(':'))
-          .map(line => {
-            const [ip, port] = line.trim().split(':');
-            return { 
-              ip, 
-              port, 
-              type: p.type, 
-              https: '待检测', 
-              region: '',
-              last_check: new Date().toISOString()
-            };
-          });
-        
-        console.log(`成功获取${p.type}代理，共${arr.length}个`);
-        list = list.concat(arr);
       } catch (e) {
         console.error(`获取${p.type}代理时出错:`, e);
       }
     }
     
-    // 如果新获取的代理列表为空，但存在旧数据，保留旧数据
-    if (list.length === 0 && existingProxies.length > 0) {
-      console.log('新获取的代理列表为空，保留现有数据');
-      return;
-    }
-    
-    console.log(`准备存储代理列表，共${list.length}个代理`);
-    
-    // 将代理IP列表存入KV
-    try {
-      await env.proxyworker.put('list', JSON.stringify(list));
-      console.log(`成功更新代理列表，共${list.length}个代理`);
-    } catch (kvError) {
-      console.error('存储代理列表到KV时出错:', kvError);
+    if (list.length > 0) {
+      // 使用备用方法获取的代理可能需要验证，此处可考虑增加简单验证
+      console.log(`共获取到 ${list.length} 个代理，准备更新到KV...`);
+      
+      // 将代理IP列表存入KV
+      try {
+        await env.proxyworker.put('list', JSON.stringify(list));
+        console.log(`成功从API更新代理列表，共${list.length}个代理`);
+      } catch (kvError) {
+        console.error('存储代理列表到KV时出错:', kvError);
+      }
+    } else {
+      console.error('无法获取任何代理数据，请检查网络或API可用性');
     }
   } catch (err) {
     console.error('获取代理列表失败:', err);
