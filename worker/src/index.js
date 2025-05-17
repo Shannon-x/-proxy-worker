@@ -1,35 +1,40 @@
-import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
-
+// 不再使用 `kv-asset-handler`，改用 `env.__STATIC_CONTENT` 内置绑定
+ 
 export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    if (url.pathname === '/proxies.json') {
-      const data = await env.PROXIES.get('list') || '[]';
-      return new Response(data, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    // 静态资源处理，根路径映射到 index.html
-    const event = { request, env, waitUntil: ctx.waitUntil };
-    try {
-      return await getAssetFromKV(event, {
-        mapRequestToAsset: (req) => {
-          const parsedURL = new URL(req.url);
-          if (parsedURL.pathname === '/') {
-            parsedURL.pathname = '/index.html';
-          }
-          return new Request(parsedURL.toString(), req);
-        }
-      });
-    } catch (e) {
-      console.error('Asset handler error:', e);
-      return new Response('Not found', { status: 404 });
-    }
-  },
+   async fetch(request, env, ctx) {
+     const url = new URL(request.url);
+     // JSON 数据接口
+     if (url.pathname === '/proxies.json') {
+       const data = await env.PROXIES.get('list') || '[]';
+       return new Response(data, {
+         headers: { 'Content-Type': 'application/json' }
+       });
+     }
+     // 根路径映射到 index.html
+-    let path = url.pathname;
++    let path = url.pathname === '/' ? '/index.html' : url.pathname;
+     // 忽略 favicon
+-    if (path === '/favicon.ico') {
+-      return new Response(null, { status: 204 });
+-    }
++    if (path === '/favicon.ico') return new Response(null, { status: 204 });
+     // 构造静态资源请求
+     const assetUrl = new URL(path, request.url);
+     const assetRequest = new Request(assetUrl.toString(), request);
+-    try {
+-      return await env.__STATIC_CONTENT.fetch(assetRequest);
+-    } catch {
+-      return new Response('Not found', { status: 404 });
+-    }
++    // 尝试从内置 KV 绑定获取资源
++    const response = await env.__STATIC_CONTENT.fetch(assetRequest);
++    if (response.status === 404) return new Response('Not found', { status: 404 });
++    return response;
+   },
 
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(fetchAndStore(env));
-  }
+   async scheduled(event, env, ctx) {
+     ctx.waitUntil(fetchAndStore(env));
+   }
 };
 
 // 从 Proxyscrape 拉取 HTTP、SOCKS4、SOCKS5 代理列表并存入 KV
