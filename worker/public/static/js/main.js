@@ -21,7 +21,7 @@ async function loadProxies() {
     
     try {
         // 添加时间戳和随机数，确保每次都是新请求，不使用缓存
-        const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
+        const cacheBuster = '?t=' + Date.now() + '&r=' + Math.random();
         const response = await fetch('/proxies.json' + cacheBuster, {
             headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -30,6 +30,8 @@ async function loadProxies() {
             },
             cache: 'no-store' // 告诉浏览器不要缓存
         });
+        
+        console.log('获取代理数据请求完成, 时间: ' + new Date().toLocaleTimeString() + ', 状态: ' + response.status);
         
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -84,8 +86,8 @@ async function loadProxies() {
             ? new Date(proxies[0].last_check).toLocaleString()
             : '未知';
             
-        statusElem.innerHTML = `<div>已加载 <b>${proxies.length}</b> 个代理 (最后更新: <b>${lastUpdateTime}</b>)</div>
-            <div class="small mt-1">已验证: ${validatedProxies.length} 个 | 有地区信息: ${withRegion} 个</div>`;
+        statusElem.innerHTML = '<div>已加载 <b>' + proxies.length + '</b> 个代理 (最后更新: <b>' + lastUpdateTime + '</b>)</div>' +
+            '<div class="small mt-1">已验证: ' + validatedProxies.length + ' 个 | 有地区信息: ' + withRegion + ' 个</div>';
         statusElem.style.backgroundColor = '#d1e7dd';
         
         populateFilters(); // 填充筛选选项
@@ -147,12 +149,12 @@ function exportCSV() {
     const rows = [headers].concat(
         filtered.map(p => [p.ip, p.port, p.type, p.https, p.region])
     );
-    const csvContent = rows.map(r => r.map(field => `"${field}"`).join(',')).join('\n');
+    const csvContent = rows.map(r => r.map(field => '"' + (field || '') + '"').join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `proxies_${Date.now()}.csv`);
+    link.setAttribute('download', 'proxies_' + Date.now() + '.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -202,16 +204,14 @@ function renderTable() {
         const hasRegion = p.region && p.region !== '未知' && p.region !== '未检测' && p.region !== '';
         
         // 创建单元格内容
-        tr.innerHTML = `
-            <td>${p.ip}</td>
-            <td>${p.port}</td>
-            <td>${p.type || '-'}</td>
-            <td>${p.https || '-'}</td>
-            <td class="${hasRegion ? 'text-success' : 'text-muted'}">
-                ${regionDisplay}
-                ${!hasRegion ? '<small>(需更新)</small>' : ''}
-            </td>
-        `;
+        tr.innerHTML = '<td>' + p.ip + '</td>' +
+            '<td>' + p.port + '</td>' +
+            '<td>' + (p.type || '-') + '</td>' +
+            '<td>' + (p.https || '-') + '</td>' +
+            '<td class="' + (hasRegion ? 'text-success' : 'text-muted') + '">' +
+                regionDisplay +
+                ((!hasRegion) ? '<small>(需更新)</small>' : '') +
+            '</td>';
         
         // 如果不是最近验证的代理，添加淡色样式
         if (!isRecent) {
@@ -228,8 +228,8 @@ function renderPagination() {
     ul.innerHTML = '';
     for (let i = 1; i <= totalPages; i++) {
         const li = document.createElement('li');
-        li.className = `page-item${i === currentPage ? ' active' : ''}`;
-        li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+        li.className = 'page-item' + (i === currentPage ? ' active' : '');
+        li.innerHTML = '<a class="page-link" href="#">' + i + '</a>';
         li.addEventListener('click', e => {
             e.preventDefault();
             currentPage = i;
@@ -259,17 +259,17 @@ function startAutoRefresh() {
     
     // 设置新计时器
     autoRefreshInterval = setInterval(() => {
-        console.log(`自动刷新触发 (${new Date().toLocaleTimeString()})`);
+        console.log('自动刷新触发 (' + new Date().toLocaleTimeString() + ')');
         loadProxies();
     }, AUTO_REFRESH_SECONDS * 1000);
     
     // 更新UI提示
     const autoRefreshSpan = document.querySelector('.auto-refresh-status');
     if (autoRefreshSpan) {
-        autoRefreshSpan.textContent = `（自动每${AUTO_REFRESH_SECONDS}秒刷新一次）`;
+        autoRefreshSpan.textContent = '（自动每' + AUTO_REFRESH_SECONDS + '秒刷新一次）';
     }
     
-    console.log(`自动刷新已启动，间隔${AUTO_REFRESH_SECONDS}秒`);
+    console.log('自动刷新已启动，间隔' + AUTO_REFRESH_SECONDS + '秒');
 }
 
 // 停止自动刷新

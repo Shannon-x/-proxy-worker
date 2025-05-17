@@ -190,8 +190,10 @@ async function loadProxies() {
             cache: 'no-store'
         });
         
+        console.log('获取代理数据请求完成, 时间: ' + new Date().toLocaleTimeString() + ', 状态: ' + response.status);
+        
         if (!response.ok) {
-            throw new Error(\`HTTP 错误: \${response.status}\`);
+            throw new Error('HTTP 错误: ' + response.status);
         }
         
         const data = await response.json();
@@ -942,40 +944,39 @@ async function fetchAndStore(env) {
             // 过滤有效的代理（具有完整字段的代理）
             const validProxies = proxies.filter(p => 
               p && p.ip && p.port && p.type && p.https
-            );
-            
-            // 合并现有代理的地区信息
-            if (existingProxies.length > 0) {
-              // 创建现有代理的查找表
-              const existingMap = {};
-              existingProxies.forEach(p => {
-                if (p && p.ip && p.port) {
+            );              // 合并现有代理的地区信息
+              if (existingProxies.length > 0) {
+                // 创建现有代理的查找表
+                const existingMap = {};
+                existingProxies.forEach(p => {
+                  if (p && p.ip && p.port) {
+                    const key = p.ip + ':' + p.port;
+                    existingMap[key] = p;
+                  }
+                });
+                
+                // 合并地区信息到新代理
+                validProxies.forEach(p => {
                   const key = p.ip + ':' + p.port;
-                  existingMap[key] = p;
-                }
+                  const existingProxy = existingMap[key];
+                  
+                  // 如果现有代理有地区信息而新代理没有或新代理地区信息为默认值，则保留地区信息
+                  if (existingProxy && existingProxy.region && 
+                      existingProxy.region !== '未知' && existingProxy.region !== '未检测' && existingProxy.region !== '' &&
+                      (!p.region || p.region === '未知' || p.region === '未检测' || p.region === '')) {
+                    console.log('保留现有地区信息: ' + key + ' => ' + existingProxy.region);
+                    p.region = existingProxy.region;
+                  }
+                });
+              }// 更新最后检查时间为当前时间
+              validProxies.forEach(p => {
+                // 确保每个代理都有最新的检查时间
+                p.last_check = new Date().toISOString();
               });
               
-              // 合并地区信息到新代理
-              validProxies.forEach(p => {
-                const key = p.ip + ':' + p.port;
-                const existingProxy = existingMap[key];
-                
-                // 如果现有代理有地区信息而新代理没有，则保留地区信息
-                if (existingProxy && existingProxy.region && 
-                    (!p.region || p.region === '未知' || p.region === '未检测' || p.region === '')) {
-                  p.region = existingProxy.region;
-                }
-              });
-            }
-            
-            // 更新最后检查时间为当前时间
-            validProxies.forEach(p => {
-              p.last_check = new Date().toISOString();
-            });
-            
-            // 有效的代理数据，更新到 KV
-            await env.proxyworker.put('list', JSON.stringify(validProxies));
-            console.log('成功更新代理列表，共 ' + validProxies.length + ' 个有效代理');
+              // 有效的代理数据，更新到 KV
+              await env.proxyworker.put('list', JSON.stringify(validProxies));
+              console.log('成功更新代理列表，共 ' + validProxies.length + ' 个有效代理，更新时间: ' + new Date().toLocaleString());
             return;
           } else {
             console.log('文件中的代理数据为空或格式无效');
@@ -1081,7 +1082,9 @@ async function fetchAndStore(env) {
         list.forEach(p => {
           const key = p.ip + ':' + p.port;
           const existingProxy = existingMap[key];
-          if (existingProxy && existingProxy.region && existingProxy.region !== '未知' && existingProxy.region !== '未检测') {
+          if (existingProxy && existingProxy.region && 
+              existingProxy.region !== '未知' && existingProxy.region !== '未检测' && existingProxy.region !== '') {
+            console.log('保留API代理地区信息: ' + key + ' => ' + existingProxy.region);
             p.region = existingProxy.region;
           }
         });
