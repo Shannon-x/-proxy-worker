@@ -4,17 +4,40 @@ let currentPage = 1;
 const pageSize = 20;
 
 async function loadProxies() {
+    const statusElem = document.createElement('div');
+    statusElem.id = 'status-message';
+    statusElem.style.padding = '10px';
+    statusElem.style.marginBottom = '15px';
+    document.querySelector('.container').insertBefore(statusElem, document.querySelector('#proxy-table'));
+    
+    statusElem.textContent = '正在加载代理数据...';
+    statusElem.style.backgroundColor = '#f8f9fa';
+    
     try {
         const response = await fetch('/proxies.json');
-        if (!response.ok) throw new Error(`HTTP 错误: ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`HTTP 错误: ${response.status}`);
+        }
         proxies = await response.json();
         filtered = proxies;
+        
+        if (proxies.length === 0) {
+            statusElem.textContent = '当前没有代理数据，系统正在采集中，请稍后刷新页面';
+            statusElem.style.backgroundColor = '#fff3cd';
+            return;
+        }
+        
+        statusElem.textContent = `已加载 ${proxies.length} 个代理`;
+        statusElem.style.backgroundColor = '#d1e7dd';
+        
         populateFilters(); // 填充筛选选项
         currentPage = 1;
         renderTable();
         renderPagination();
     } catch (err) {
         console.error('加载代理失败:', err);
+        statusElem.textContent = `加载代理失败: ${err.message}，请刷新页面重试`;
+        statusElem.style.backgroundColor = '#f8d7da';
     }
 }
 

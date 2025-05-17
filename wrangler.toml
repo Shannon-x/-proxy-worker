@@ -1,21 +1,2 @@
-name = "proxy-worker"
-
-# Worker 与静态站点根目录 (monorepo entry-point)
-[site]
-entry-point = "worker"
-bucket = "public"
-
-# 脚本入口，位于 entry-point 下的 src/index.js
-main = "src/index.js"
-
-compatibility_date = "2025-01-01"
-account_id = "7a4081a2d83d3f43fe6b1be1c926fd1c"
-
-# 定时任务
-[triggers]
-crons = ["*/5 * * * *"]
-
-# KV 命名空间绑定，用于存储代理列表
-[[kv_namespaces]]
-binding = "PROXIES"
-id = "35adf28c6d4c4a5d9d6c8440611f6efa"
+# 项目已迁移到worker目录，请使用worker目录下的wrangler.toml
+# 这个文件已废弃，请不要使用
