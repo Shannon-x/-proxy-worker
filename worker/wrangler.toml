@@ -16,9 +16,4 @@ crons = ["*/5 * * * *"]
 binding = "PROXIES"
 id = "35adf28c6d4c4a5d9d6c8440611f6efa"
 
-# KV 命名空间绑定，用于存储静态资源
-[[kv_namespaces]]
-binding = "__STATIC_CONTENT"
-id = "35adf28c6d4c4a5d9d6c8440611f6efa"
-
 # 已移除不支持的字段
