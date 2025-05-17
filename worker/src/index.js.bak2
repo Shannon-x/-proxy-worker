@@ -389,7 +389,7 @@ function exportCSV() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', "proxies_" + Date.now() + ".csv");
+    link.setAttribute('download', `proxies_\${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -404,14 +404,14 @@ function startAutoRefresh() {
     
     // 设置新计时器
     autoRefreshInterval = setInterval(() => {
-        console.log("自动刷新触发 (" + new Date().toLocaleTimeString() + ")");
+        console.log(`自动刷新触发 (\${new Date().toLocaleTimeString()})`);
         loadProxies();
     }, AUTO_REFRESH_SECONDS * 1000);
     
     // 更新UI提示
     const autoRefreshSpan = document.querySelector('.auto-refresh-status');
     if (autoRefreshSpan) {
-        autoRefreshSpan.textContent = "（自动每" + AUTO_REFRESH_SECONDS + "秒刷新一次）";
+        autoRefreshSpan.textContent = `（自动每\${AUTO_REFRESH_SECONDS}秒刷新一次）`;
     }
 }
 
@@ -641,7 +641,7 @@ function exportCSV() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', "proxies_" + Date.now() + ".csv");
+    link.setAttribute('download', `proxies_\${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -656,14 +656,14 @@ function startAutoRefresh() {
     
     // 设置新计时器
     autoRefreshInterval = setInterval(() => {
-        console.log("自动刷新触发 (" + new Date().toLocaleTimeString() + ")");
+        console.log(`自动刷新触发 (\${new Date().toLocaleTimeString()})`);
         loadProxies();
     }, AUTO_REFRESH_SECONDS * 1000);
     
     // 更新UI提示
     const autoRefreshSpan = document.querySelector('.auto-refresh-status');
     if (autoRefreshSpan) {
-        autoRefreshSpan.textContent = "（自动每" + AUTO_REFRESH_SECONDS + "秒刷新一次）";
+        autoRefreshSpan.textContent = `（自动每\${AUTO_REFRESH_SECONDS}秒刷新一次）`;
     }
 }
 
@@ -864,7 +864,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    console.log('开始执行定时任务：获取代理列表 (触发时间: ' + new Date().toISOString() + ')');
+    console.log(`开始执行定时任务：获取代理列表 (触发时间: ${new Date().toISOString()})`);
     try {
       await fetchAndStore(env);
       console.log('定时任务执行完成');
@@ -896,7 +896,7 @@ async function fetchAndStore(env) {
       existingData = await env.proxyworker.get('list');
       if (existingData) {
         existingProxies = JSON.parse(existingData);
-        console.log('成功获取现有代理列表作为备份，共 ' + existingProxies.length + ' 个');
+        console.log(`成功获取现有代理列表作为备份，共 ${existingProxies.length} 个`);
       }
     } catch (e) {
       console.error('读取现有代理列表失败:', e);
@@ -917,12 +917,12 @@ async function fetchAndStore(env) {
       }
     }
       
-    console.log('尝试从 ' + baseUrl + '/proxies.json 获取最新代理数据...');
+    console.log(`尝试从 ${baseUrl}/proxies.json 获取最新代理数据...`);
     
     try {
       // 添加时间戳和随机数，强制绕过任何缓存
-      const cacheBuster = '?t=' + Date.now() + '&r=' + Math.random();
-      const proxyDataResp = await fetch(baseUrl + '/proxies.json' + cacheBuster, {
+      const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
+      const proxyDataResp = await fetch(`${baseUrl}/proxies.json${cacheBuster}`, {
         cf: { cacheTtl: 0 }, // 禁用CF缓存
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -950,14 +950,14 @@ async function fetchAndStore(env) {
               const existingMap = {};
               existingProxies.forEach(p => {
                 if (p && p.ip && p.port) {
-                  const key = p.ip + ':' + p.port;
+                  const key = `${p.ip}:${p.port}`;
                   existingMap[key] = p;
                 }
               });
               
               // 合并地区信息到新代理
               validProxies.forEach(p => {
-                const key = p.ip + ':' + p.port;
+                const key = `${p.ip}:${p.port}`;
                 const existingProxy = existingMap[key];
                 
                 // 如果现有代理有地区信息而新代理没有，则保留地区信息
@@ -975,7 +975,7 @@ async function fetchAndStore(env) {
             
             // 有效的代理数据，更新到 KV
             await env.proxyworker.put('list', JSON.stringify(validProxies));
-            console.log('成功更新代理列表，共 ' + validProxies.length + ' 个有效代理');
+            console.log(`成功更新代理列表，共 ${validProxies.length} 个有效代理`);
             return;
           } else {
             console.log('文件中的代理数据为空或格式无效');
@@ -984,7 +984,7 @@ async function fetchAndStore(env) {
           console.error('解析代理数据失败:', parseErr);
         }
       } else {
-        console.log('无法获取代理数据文件: ' + proxyDataResp.status + ' ' + proxyDataResp.statusText);
+        console.log(`无法获取代理数据文件: ${proxyDataResp.status} ${proxyDataResp.statusText}`);
       }
     } catch (fetchErr) {
       console.error('获取代理数据文件失败:', fetchErr);
@@ -992,7 +992,7 @@ async function fetchAndStore(env) {
     
     // 如果最新数据更新失败，但已有数据不为空，保留现有数据
     if (existingProxies.length > 0) {
-      console.log('无法获取最新代理数据，保留现有数据（' + existingProxies.length + '个代理）');
+      console.log(`无法获取最新代理数据，保留现有数据（${existingProxies.length}个代理）`);
       return;
     }
     
@@ -1009,12 +1009,12 @@ async function fetchAndStore(env) {
       try {
         // 尝试不同的API源以增加获取成功的概率
         const apiSources = [
-          'https://api.proxyscrape.com/v2/?request=getproxies&protocol=' + p.protocol + '&timeout=10000&country=all&ssl=all&anonymity=all',
-          'https://www.proxy-list.download/api/v1/get?type=' + p.protocol.toUpperCase(),
-          'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/' + p.protocol + '.txt',
-          'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/' + p.protocol + '.txt',
-          'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/' + p.protocol + '.txt',
-          'https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt'
+          `https://api.proxyscrape.com/v2/?request=getproxies&protocol=${p.protocol}&timeout=10000&country=all&ssl=all&anonymity=all`,
+          `https://www.proxy-list.download/api/v1/get?type=${p.protocol.toUpperCase()}`,
+          `https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/${p.protocol}.txt`,
+          `https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/${p.protocol}.txt`,
+          `https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/${p.protocol}.txt`,
+          `https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt`
         ];
         
         for (const apiUrl of apiSources) {
@@ -1052,7 +1052,7 @@ async function fetchAndStore(env) {
               });
             
             if (arr.length > 0) {
-              console.log('成功从 ' + apiUrl + ' 获取' + p.type + '代理，共' + arr.length + '个');
+              console.log(`成功从 ${apiUrl} 获取${p.type}代理，共${arr.length}个`);
               list = list.concat(arr);
               // 获取成功后跳出当前API源循环
               break;
@@ -1072,14 +1072,14 @@ async function fetchAndStore(env) {
         const existingMap = {};
         existingProxies.forEach(p => {
           if (p && p.ip && p.port) {
-            const key = p.ip + ':' + p.port;
+            const key = `${p.ip}:${p.port}`;
             existingMap[key] = p;
           }
         });
         
         // 合并地区信息
         list.forEach(p => {
-          const key = p.ip + ':' + p.port;
+          const key = `${p.ip}:${p.port}`;
           const existingProxy = existingMap[key];
           if (existingProxy && existingProxy.region && existingProxy.region !== '未知' && existingProxy.region !== '未检测') {
             p.region = existingProxy.region;
