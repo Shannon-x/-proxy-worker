@@ -7,9 +7,9 @@ account_id = "7a4081a2d83d3f43fe6b1be1c926fd1c"
 [site]
 bucket = "./public"
 
-# 定时任务，每5分钟执行一次
+# 定时任务，每10分钟执行一次
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/10 * * * *"]
 
 # KV 命名空间绑定
 [[kv_namespaces]]

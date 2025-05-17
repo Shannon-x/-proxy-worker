@@ -313,7 +313,12 @@ export default {
 
   async scheduled(event, env, ctx) {
     console.log('开始执行定时任务：获取代理列表');
-    ctx.waitUntil(fetchAndStore(env));
+    try {
+      await fetchAndStore(env);
+      console.log('定时任务执行完成');
+    } catch(e) {
+      console.error('定时任务执行失败:', e);
+    }
   }
 };
 
@@ -326,12 +331,34 @@ async function fetchAndStore(env) {
       return;
     }
     
-    const protocols = [
-      { protocol: 'http', type: 'HTTP' },
-      { protocol: 'socks4', type: 'SOCKS4' },
-      { protocol: 'socks5', type: 'SOCKS5' },
-    ];
-    let list = [];
+    // 尝试从本地文件读取代理列表
+    try {
+      const proxiesJson = await fetch('https://raw.githubusercontent.com/username/proxy-worker/main/worker/public/proxies.json')
+        .catch(() => fetch('https://proxy-worker.pages.dev/proxies.json'))
+        .catch(() => null);
+      
+      if (proxiesJson && proxiesJson.ok) {
+        const proxyData = await proxiesJson.text();
+        if (proxyData) {
+          try {
+            // 解析JSON确保格式正确
+            const proxies = JSON.parse(proxyData);
+            
+            // 确认是数组且至少有一项
+            if (Array.isArray(proxies) && proxies.length > 0) {
+              // 存入KV
+              await env.proxyworker.put('list', JSON.stringify(proxies));
+              console.log(`成功从远程文件更新代理列表，共${proxies.length}个代理`);
+              return;
+            }
+          } catch (jsonError) {
+            console.error('解析代理JSON时出错:', jsonError);
+          }
+        }
+      }
+    } catch (fetchError) {
+      console.error('获取远程代理文件失败:', fetchError);
+    }
     
     // 尝试获取现有代理列表
     let existingProxies = [];
@@ -339,11 +366,28 @@ async function fetchAndStore(env) {
       const existingData = await env.proxyworker.get('list');
       if (existingData) {
         existingProxies = JSON.parse(existingData);
-        console.log(`成功获取现有代理列表，共${existingProxies.length}个代理`);
+        console.log(`成功获取KV中的现有代理列表，共${existingProxies.length}个代理`);
+        if (existingProxies.length > 0) {
+          // 如果距离上次更新不到6小时且有足够的代理，则跳过本次更新
+          const now = new Date().getTime();
+          const lastCheck = existingProxies[0].last_check ? new Date(existingProxies[0].last_check).getTime() : 0;
+          if (now - lastCheck < 6 * 60 * 60 * 1000 && existingProxies.length > 50) {
+            console.log(`上次更新时间距离现在不到6小时，且有${existingProxies.length}个代理，跳过更新`);
+            return;
+          }
+        }
       }
     } catch (e) {
       console.error('读取现有代理失败:', e);
     }
+    
+    // 备用方法：直接从代理API获取
+    const protocols = [
+      { protocol: 'http', type: 'HTTP' },
+      { protocol: 'socks4', type: 'SOCKS4' },
+      { protocol: 'socks5', type: 'SOCKS5' },
+    ];
+    let list = [];
     
     for (const p of protocols) {
       try {
@@ -377,7 +421,7 @@ async function fetchAndStore(env) {
       }
     }
     
-    // 如果新获取的列表为空，但存在旧数据，保留旧数据
+    // 如果新获取的代理列表为空，但存在旧数据，保留旧数据
     if (list.length === 0 && existingProxies.length > 0) {
       console.log('新获取的代理列表为空，保留现有数据');
       return;
