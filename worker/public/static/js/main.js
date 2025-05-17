@@ -16,9 +16,17 @@ async function loadProxies() {
     try {
         const response = await fetch('/proxies.json');
         if (!response.ok) {
-            throw new Error(`HTTP 错误: ${response.status}`);
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `HTTP 错误: ${response.status}`);
         }
-        proxies = await response.json();
+        
+        // 检查返回值是否为对象且包含error属性
+        const data = await response.json();
+        if (data && typeof data === 'object' && data.error) {
+            throw new Error(data.message || data.error || '未知错误');
+        }
+        
+        proxies = Array.isArray(data) ? data : [];
         filtered = proxies;
         
         if (proxies.length === 0) {

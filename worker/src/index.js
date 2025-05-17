@@ -12,14 +12,38 @@ export default {
       
       // JSON 数据接口
       if (url.pathname === '/proxies.json') {
-        const data = await env.PROXIES.get('list') || '[]';
-        return new Response(data, {
-          headers: { 
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Access-Control-Allow-Origin': '*'
+        try {
+          // 确保 proxyworker KV 命名空间存在并正确绑定
+          if (!env.proxyworker) {
+            console.error('proxyworker KV 命名空间未绑定!');
+            return new Response(JSON.stringify({ error: 'KV存储未配置', message: '系统暂时无法提供代理数据' }), {
+              status: 503,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': '*'
+              }
+            });
           }
-        });
+          
+          const data = await env.proxyworker.get('list');
+          return new Response(data || '[]', {
+            headers: { 
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Access-Control-Allow-Origin': '*'
+            }
+          });
+        } catch (err) {
+          console.error('获取代理数据出错:', err);
+          return new Response(JSON.stringify({ error: err.message }), {
+            status: 500,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          });
+        }
       }
       
       // 使用 getAssetFromKV 处理静态资源
@@ -61,6 +85,12 @@ export default {
 // 从 Proxyscrape 拉取 HTTP、SOCKS4、SOCKS5 代理列表并存入 KV
 async function fetchAndStore(env) {
   try {
+    // 首先检查 KV 绑定是否存在
+    if (!env.proxyworker) {
+      console.error('无法执行定时任务：proxyworker KV 命名空间未绑定!');
+      return;
+    }
+    
     const protocols = [
       { protocol: 'http', type: 'HTTP' },
       { protocol: 'socks4', type: 'SOCKS4' },
@@ -71,7 +101,7 @@ async function fetchAndStore(env) {
     // 尝试获取现有代理列表
     let existingProxies = [];
     try {
-      const existingData = await env.PROXIES.get('list');
+      const existingData = await env.proxyworker.get('list');
       if (existingData) {
         existingProxies = JSON.parse(existingData);
       }
@@ -117,7 +147,7 @@ async function fetchAndStore(env) {
     }
     
     // 将代理IP列表存入KV
-    await env.PROXIES.put('list', JSON.stringify(list));
+    await env.proxyworker.put('list', JSON.stringify(list));
     console.log(`成功更新代理列表，共${list.length}个代理`);
   } catch (err) {
     console.error('获取代理列表失败:', err);

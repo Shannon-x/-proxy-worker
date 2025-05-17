@@ -13,5 +13,6 @@ crons = ["*/5 * * * *"]
 
 # KV 命名空间绑定
 [[kv_namespaces]]
-binding = "PROXIES"
+binding = "proxyworker"
 id = "35adf28c6d4c4a5d9d6c8440611f6efa"
+preview_id = "35adf28c6d4c4a5d9d6c8440611f6efa"
