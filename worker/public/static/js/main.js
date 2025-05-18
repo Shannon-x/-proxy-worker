@@ -21,7 +21,11 @@ async function loadProxies() {
     
     try {
         // 添加时间戳和随机数，确保每次都是新请求，不使用缓存
-        const cacheBuster = '?t=' + Date.now() + '&r=' + Math.random();
+        const timestamp = Date.now();
+        const random = Math.random();
+        const cacheBuster = '?t=' + timestamp + '&r=' + random;
+        console.log('正在获取代理数据，时间戳: ' + timestamp);
+        
         const response = await fetch('/proxies.json' + cacheBuster, {
             headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -82,9 +86,17 @@ async function loadProxies() {
         }
         
         // 显示代理更新时间和统计
-        const lastUpdateTime = proxies[0]?.last_check 
-            ? new Date(proxies[0].last_check).toLocaleString()
-            : '未知';
+        let lastUpdateTime = '未知';
+        if (proxies[0] && proxies[0].last_check) {
+            try {
+                const lastCheckDate = new Date(proxies[0].last_check);
+                lastUpdateTime = lastCheckDate.toLocaleString('zh-CN');
+                console.log('代理更新时间解析: ' + proxies[0].last_check + ' => ' + lastUpdateTime);
+            } catch (e) {
+                console.error('解析时间戳错误:', e);
+                lastUpdateTime = String(proxies[0].last_check);
+            }
+        }
             
         statusElem.innerHTML = '<div>已加载 <b>' + proxies.length + '</b> 个代理 (最后更新: <b>' + lastUpdateTime + '</b>)</div>' +
             '<div class="small mt-1">已验证: ' + validatedProxies.length + ' 个 | 有地区信息: ' + withRegion + ' 个</div>';
@@ -259,8 +271,13 @@ function startAutoRefresh() {
     
     // 设置新计时器
     autoRefreshInterval = setInterval(() => {
-        console.log('自动刷新触发 (' + new Date().toLocaleTimeString() + ')');
-        loadProxies();
+        const now = new Date();
+        console.log("自动刷新触发 (" + now.toLocaleTimeString() + ")");
+        loadProxies().then(success => {
+            console.log("自动刷新完成，结果: " + (success ? "成功" : "失败") + ", 时间: " + new Date().toLocaleTimeString());
+        }).catch(err => {
+            console.error("自动刷新出错:", err);
+        });
     }, AUTO_REFRESH_SECONDS * 1000);
     
     // 更新UI提示

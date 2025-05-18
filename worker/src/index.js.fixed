@@ -180,12 +180,8 @@ async function loadProxies() {
     
     try {
     // 添加时间戳和随机数以避免缓存
-        const timestamp = Date.now();
-        const random = Math.random();
-        const cacheBuster = '?t=' + timestamp + '&r=' + random;
-        console.log('正在获取代理数据，时间戳: ' + timestamp);
+        const cacheBuster = '?t=' + Date.now() + '&r=' + Math.random();
         const response = await fetch('/proxies.json' + cacheBuster, {
-            method: 'GET',
             headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
@@ -233,17 +229,9 @@ async function loadProxies() {
             }
             
             // 显示最后更新时间和统计
-            let lastUpdateTime = '未知';
-            if (proxies[0] && proxies[0].last_check) {
-                try {
-                    const lastCheckDate = new Date(proxies[0].last_check);
-                    lastUpdateTime = lastCheckDate.toLocaleString('zh-CN');
-                    console.log('代理更新时间解析: ' + proxies[0].last_check + ' => ' + lastUpdateTime);
-                } catch (e) {
-                    console.error('解析时间戳错误:', e);
-                    lastUpdateTime = String(proxies[0].last_check);
-                }
-            }
+            const lastUpdateTime = proxies[0]?.last_check 
+                ? new Date(proxies[0].last_check).toLocaleString()
+                : '未知';
                 
             statusElem.innerHTML = '<div>已加载 <b>' + proxies.length + '</b> 个代理 (最后更新: <b>' + lastUpdateTime + '</b>)</div>' +
                 '<div class="small mt-1">已验证: ' + validatedCount + ' 个 | 有地区信息: ' + withRegionCount + ' 个</div>';
@@ -418,13 +406,8 @@ function startAutoRefresh() {
     
     // 设置新计时器
     autoRefreshInterval = setInterval(() => {
-        const now = new Date();
-        console.log("自动刷新触发 (" + now.toLocaleTimeString() + ")");
-        loadProxies().then(success => {
-            console.log("自动刷新完成，结果: " + (success ? "成功" : "失败") + ", 时间: " + new Date().toLocaleTimeString());
-        }).catch(err => {
-            console.error("自动刷新出错:", err);
-        });
+        console.log("自动刷新触发 (" + new Date().toLocaleTimeString() + ")");
+        loadProxies();
     }, AUTO_REFRESH_SECONDS * 1000);
     
     // 更新UI提示
@@ -675,13 +658,8 @@ function startAutoRefresh() {
     
     // 设置新计时器
     autoRefreshInterval = setInterval(() => {
-        const now = new Date();
-        console.log("自动刷新触发 (" + now.toLocaleTimeString() + ")");
-        loadProxies().then(success => {
-            console.log("自动刷新完成，结果: " + (success ? "成功" : "失败") + ", 时间: " + new Date().toLocaleTimeString());
-        }).catch(err => {
-            console.error("自动刷新出错:", err);
-        });
+        console.log("自动刷新触发 (" + new Date().toLocaleTimeString() + ")");
+        loadProxies();
     }, AUTO_REFRESH_SECONDS * 1000);
     
     // 更新UI提示
@@ -752,10 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-});
-</script>
-</body>
-</html>`;
+});`;
       return new Response(js, {
         headers: { 'Content-Type': 'application/javascript' }
       });
@@ -910,7 +885,7 @@ async function fetchAndStore(env) {
       return;
     }
     
-    console.log('开始读取最新代理数据，时间: ' + new Date().toISOString());
+    console.log('开始读取最新代理数据...');
     
     // 获取代理数据的优先级：
     // 1. 当前Worker域名下的proxies.json（动态更新的最新数据）
@@ -981,7 +956,6 @@ async function fetchAndStore(env) {
                 });
                 
                 // 合并地区信息到新代理
-                let regionUpdatedCount = 0;
                 validProxies.forEach(p => {
                   const key = p.ip + ':' + p.port;
                   const existingProxy = existingMap[key];
@@ -992,55 +966,19 @@ async function fetchAndStore(env) {
                       (!p.region || p.region === '未知' || p.region === '未检测' || p.region === '')) {
                     console.log('保留现有地区信息: ' + key + ' => ' + existingProxy.region);
                     p.region = existingProxy.region;
-                    regionUpdatedCount++;
                   }
                 });
-                
-                console.log(`完成地区信息合并，共更新 ${regionUpdatedCount} 个代理的地区信息`);
               }
               
               // 更新最后检查时间为当前时间
-              const currentTime = new Date();
-              const isoTime = currentTime.toISOString();
-              console.log('更新代理时间戳为: ' + isoTime);
-              
               validProxies.forEach(p => {
                 // 确保每个代理都有最新的检查时间
-                p.last_check = isoTime;
-                
-                // 确保每个代理都有地区信息，即使是默认值
-                if (!p.region || p.region.trim() === '') {
-                  p.region = '未检测';
-                }
+                p.last_check = new Date().toISOString();
               });
               
-              // 有效的代理数据，更新到 KV 并写入本地文件
+              // 有效的代理数据，更新到 KV
               await env.proxyworker.put('list', JSON.stringify(validProxies));
-              
-              // 将数据写入到静态资源，这样下次刷新页面时可以直接获取最新数据
-              // 注意：这需要 Cloudflare Workers 具有写入权限，或者通过其他方式更新文件
-              try {
-                const cfUrl = new URL(env.CF_PAGES_URL || env.CF_WORKER_DOMAIN || request.url);
-                const assetUpdateUrl = `${cfUrl.protocol}//${cfUrl.host}/update-proxies`;
-                const updateResponse = await fetch(assetUpdateUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'X-Update-Secret': env.UPDATE_SECRET || 'default-secret'
-                  },
-                  body: JSON.stringify(validProxies)
-                });
-                
-                if (updateResponse.ok) {
-                  console.log('成功更新静态代理文件');
-                } else {
-                  console.error('更新静态代理文件失败:', await updateResponse.text());
-                }
-              } catch (writeErr) {
-                console.error('写入静态代理文件时出错:', writeErr);
-              }
-              
-              console.log('成功更新代理列表到 KV，共 ' + validProxies.length + ' 个有效代理，更新时间: ' + currentTime.toLocaleString());
+              console.log('成功更新代理列表，共 ' + validProxies.length + ' 个有效代理，更新时间: ' + new Date().toLocaleString());
               return;
           } else {
             console.log('文件中的代理数据为空或格式无效');
@@ -1168,100 +1106,5 @@ async function fetchAndStore(env) {
     }
   } catch (err) {
     console.error('获取代理列表失败:', err);
-  }
-}
-
-// 处理代理相关的API请求
-async function handleProxiesAPI(request, env) {
-  const url = new URL(request.url);
-  
-  // 获取代理列表
-  if (request.method === 'GET') {
-    try {
-      const data = await env.proxyworker.get('list');
-      const proxies = data ? JSON.parse(data) : [];
-      
-      // 处理查询参数进行过滤
-      const searchParams = url.searchParams;
-      const ipFilter = searchParams.get('ip') || '';
-      const regionFilter = searchParams.get('region') || '';
-      const typeFilter = searchParams.get('type') || '';
-      
-      const filteredProxies = proxies.filter(p => {
-        return (!ipFilter || p.ip.includes(ipFilter)) &&
-               (!regionFilter || p.region === regionFilter) &&
-               (!typeFilter || p.type === typeFilter);
-      });
-      
-      return new Response(JSON.stringify(filteredProxies), {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    } catch (e) {
-      return new Response('获取代理列表失败', { status: 500 });
-    }
-  }
-  
-  return new Response('不支持的请求方法', { status: 405 });
-}
-
-// 更新代理文件的处理程序
-async function updateProxiesFile(request, env) {
-  // 验证更新密钥
-  const updateSecret = env.UPDATE_SECRET || 'default-secret';
-  const providedSecret = request.headers.get('X-Update-Secret');
-  
-  if (providedSecret !== updateSecret) {
-    return new Response('未授权', { status: 401 });
-  }
-  
-  try {
-    // 读取请求体中的代理数据
-    const proxiesData = await request.json();
-    
-    if (!Array.isArray(proxiesData) || proxiesData.length === 0) {
-      return new Response('无效的代理数据格式', { status: 400 });
-    }
-    
-    // 使用R2或KV存储代理数据
-    // 注意：为了使前端能直接访问这个文件，我们需要将其作为静态资源可用
-    // 这里有两种方法：
-    // 1. 使用R2并配置公共访问
-    // 2. 使用KV并在静态资源请求处理中特殊处理
-    
-    if (env.__STATIC_CONTENT) {
-      // 方法2：使用KV存储，并在请求处理中特殊处理
-      await env.__STATIC_CONTENT.put(
-        'proxies.json', 
-        JSON.stringify(proxiesData, null, 2),
-        { contentType: 'application/json' }
-      );
-      
-      console.log(`已更新代理文件，共 ${proxiesData.length} 个条目`);
-      return new Response(JSON.stringify({ success: true, count: proxiesData.length }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } 
-    
-    // 如果没有KV或R2存储，则返回错误
-    return new Response('无可用的存储机制来更新静态文件', { status: 500 });
-  } catch (error) {
-    console.error('更新代理文件失败:', error);
-    return new Response('更新代理文件失败: ' + error.message, { status: 500 });
-  }
-}
-
-// 立即刷新代理的请求处理
-async function handleRefreshRequest(request, env, ctx) {
-  try {
-    // 直接从源头获取代理数据并更新KV
-    await fetchAndStore(env);
-    
-    return new Response('代理数据已刷新', { status: 200 });
-  } catch (e) {
-    console.error('立即刷新代理时出错:', e);
-    return new Response('立即刷新代理失败', { status: 500 });
   }
 }
