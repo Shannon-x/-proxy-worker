@@ -179,11 +179,12 @@ async function loadProxies() {
     }
     
     try {
-    // 添加时间戳和随机数以避免缓存
+        // 强制破坏缓存
         const timestamp = Date.now();
-        const random = Math.random();
-        const cacheBuster = '?t=' + timestamp + '&r=' + random;
-        console.log('正在获取代理数据，时间戳: ' + timestamp);
+        const random = Math.floor(Math.random() * 1000000);
+        const cacheBuster = '?nocache=' + timestamp + '&rand=' + random;
+        console.log(`正在获取代理数据，请求URL: /proxies.json${cacheBuster}，时间: ${new Date().toLocaleTimeString()}`);
+        
         const response = await fetch('/proxies.json' + cacheBuster, {
             method: 'GET',
             headers: {
@@ -191,7 +192,7 @@ async function loadProxies() {
                 'Pragma': 'no-cache',
                 'Expires': '0'
             },
-            cache: 'no-store'
+            cache: 'no-store' // 告诉浏览器不要缓存
         });
         
         console.log('获取代理数据请求完成, 时间: ' + new Date().toLocaleTimeString() + ', 状态: ' + response.status);
@@ -236,9 +237,29 @@ async function loadProxies() {
             let lastUpdateTime = '未知';
             if (proxies[0] && proxies[0].last_check) {
                 try {
-                    const lastCheckDate = new Date(proxies[0].last_check);
-                    lastUpdateTime = lastCheckDate.toLocaleString('zh-CN');
-                    console.log('代理更新时间解析: ' + proxies[0].last_check + ' => ' + lastUpdateTime);
+                    const lastCheckStr = proxies[0].last_check;
+                    console.log('收到的时间戳原始值:', lastCheckStr);
+                    
+                    // 确保是有效的ISO格式时间字符串
+                    const lastCheckDate = new Date(lastCheckStr);
+                    
+                    // 检查是否是有效日期
+                    if (isNaN(lastCheckDate.getTime())) {
+                        throw new Error('无效的日期时间格式');
+                    }
+                    
+                    // 格式化为本地时间字符串
+                    lastUpdateTime = lastCheckDate.toLocaleString('zh-CN', {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: 'numeric',
+                        second: 'numeric',
+                        hour12: false
+                    });
+                    
+                    console.log('代理更新时间解析成功: ' + lastCheckStr + ' => ' + lastUpdateTime);
                 } catch (e) {
                     console.error('解析时间戳错误:', e);
                     lastUpdateTime = String(proxies[0].last_check);
