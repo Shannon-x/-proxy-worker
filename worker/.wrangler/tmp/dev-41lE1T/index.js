@@ -646,7 +646,7 @@ async function loadProxies() {
         const timestamp = Date.now();
         const random = Math.floor(Math.random() * 1000000);
         const cacheBuster = '?nocache=' + timestamp + '&rand=' + random;
-        console.log('\u6B63\u5728\u83B7\u53D6\u4EE3\u7406\u6570\u636E\uFF0C\u8BF7\u6C42URL: /proxies.json' + cacheBuster + '\uFF0C\u65F6\u95F4: ' + new Date().toLocaleTimeString());
+        console.log('Getting proxy data, URL: /proxies.json' + cacheBuster + ', time: ' + new Date().toLocaleTimeString());
         
         const response = await fetch('/proxies.json' + cacheBuster, {
             method: 'GET',
@@ -658,10 +658,10 @@ async function loadProxies() {
             cache: 'no-store' // \u544A\u8BC9\u6D4F\u89C8\u5668\u4E0D\u8981\u7F13\u5B58
         });
         
-        console.log('\u83B7\u53D6\u4EE3\u7406\u6570\u636E\u8BF7\u6C42\u5B8C\u6210, \u65F6\u95F4: ' + new Date().toLocaleTimeString() + ', \u72B6\u6001: ' + response.status);
+        console.log('Request completed, time: ' + new Date().toLocaleTimeString() + ', status: ' + response.status);
         
         if (!response.ok) {
-            throw new Error('HTTP \u9519\u8BEF: ' + response.status);
+            throw new Error('HTTP error: ' + response.status);
         }
         
         const data = await response.json();
@@ -701,14 +701,14 @@ async function loadProxies() {
             if (proxies[0] && proxies[0].last_check) {
                 try {
                     const lastCheckStr = proxies[0].last_check;
-                    console.log('\u6536\u5230\u7684\u65F6\u95F4\u6233\u539F\u59CB\u503C:', lastCheckStr);
+                    console.log('Original timestamp value:', lastCheckStr);
                     
                     // \u786E\u4FDD\u662F\u6709\u6548\u7684ISO\u683C\u5F0F\u65F6\u95F4\u5B57\u7B26\u4E32
                     const lastCheckDate = new Date(lastCheckStr);
                     
                     // \u68C0\u67E5\u662F\u5426\u662F\u6709\u6548\u65E5\u671F
                     if (isNaN(lastCheckDate.getTime())) {
-                        throw new Error('\u65E0\u6548\u7684\u65E5\u671F\u65F6\u95F4\u683C\u5F0F');
+                        throw new Error('Invalid date format');
                     }
                     
                     // \u683C\u5F0F\u5316\u4E3A\u672C\u5730\u65F6\u95F4\u5B57\u7B26\u4E32
@@ -722,9 +722,9 @@ async function loadProxies() {
                         hour12: false
                     });
                     
-                    console.log('\u4EE3\u7406\u66F4\u65B0\u65F6\u95F4\u89E3\u6790\u6210\u529F: ' + lastCheckStr + ' => ' + lastUpdateTime);
+                    console.log('Proxy update time parsed successfully: ' + lastCheckStr + ' => ' + lastUpdateTime);
                 } catch (e) {
-                    console.error('\u89E3\u6790\u65F6\u95F4\u6233\u9519\u8BEF:', e);
+                    console.error('Error parsing timestamp:', e);
                     lastUpdateTime = String(proxies[0].last_check);
                 }
             }
