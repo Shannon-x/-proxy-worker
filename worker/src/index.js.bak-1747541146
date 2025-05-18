@@ -279,7 +279,7 @@ async function loadProxies() {
     } catch (err) {
         console.error('加载代理失败:', err);
         if (statusElem) {
-            statusElem.textContent = '加载代理失败: ' + err.message + '，请刷新页面重试';
+            statusElem.textContent = \`加载代理失败: \${err.message}，请刷新页面重试\`;
             statusElem.style.backgroundColor = '#f8d7da';
         }
         return false;
@@ -785,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 对于其他文件，返回404
     return new Response('Not Found', { status: 404 });
   } catch (e) {
-    return new Response('静态资源错误: ' + e.message, { status: 500 });
+    return new Response(`静态资源错误: ${e.message}`, { status: 500 });
   }
 }
 
@@ -904,7 +904,7 @@ export default {
       }
     } catch (e) {
       console.error('Worker全局错误:', e);
-      return new Response('服务错误: ' + e.message, { 
+      return new Response(`服务错误: ${e.message}`, { 
         status: 500,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' }
       });
@@ -1017,7 +1017,7 @@ async function fetchAndStore(env) {
                   }
                 });
                 
-                console.log('完成地区信息合并，共更新 ' + regionUpdatedCount + ' 个代理的地区信息');
+                console.log(`完成地区信息合并，共更新 ${regionUpdatedCount} 个代理的地区信息`);
               }
               
               // 更新最后检查时间为当前时间
@@ -1105,20 +1105,20 @@ async function fetchAndStore(env) {
         
         for (const apiUrl of apiSources) {
           try {
-            console.log('尝试从 ' + apiUrl + ' 获取' + p.type + '代理...');
+            console.log(`尝试从 ${apiUrl} 获取${p.type}代理...`);
             const res = await fetch(apiUrl, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
             });
             
             if (!res.ok) {
-              console.error('从 ' + apiUrl + ' 获取' + p.type + '代理失败: ' + res.status);
+              console.error(`从 ${apiUrl} 获取${p.type}代理失败: ${res.status}`);
               continue;
             }
             
             const text = await res.text();
             // 确保文本内容不为空且包含IP:PORT格式
             if (!text || !text.includes(':')) {
-              console.error('从 ' + apiUrl + ' 获取的内容无效，不包含代理数据');
+              console.error(`从 ${apiUrl} 获取的内容无效，不包含代理数据`);
               continue;
             }
             
@@ -1144,11 +1144,11 @@ async function fetchAndStore(env) {
               break;
             }
           } catch (e) {
-            console.error('从 ' + apiUrl + ' 获取' + p.type + '代理时出错:', e);
+            console.error(`从 ${apiUrl} 获取${p.type}代理时出错:`, e);
           }
         }
       } catch (e) {
-        console.error('获取' + p.type + '代理时出错:', e);
+        console.error(`获取${p.type}代理时出错:`, e);
       }
     }
     
@@ -1175,12 +1175,12 @@ async function fetchAndStore(env) {
         });
       }
       
-      console.log('共获取到 ' + list.length + ' 个代理，准备更新到KV...');
+      console.log(`共获取到 ${list.length} 个代理，准备更新到KV...`);
       
       // 将代理IP列表存入KV
       try {
         await env.proxyworker.put('list', JSON.stringify(list));
-        console.log('成功从API更新代理列表，共' + list.length + '个代理');
+        console.log(`成功从API更新代理列表，共${list.length}个代理`);
       } catch (kvError) {
         console.error('存储代理列表到KV时出错:', kvError);
       }
@@ -1260,7 +1260,7 @@ async function updateProxiesFile(request, env) {
         { contentType: 'application/json' }
       );
       
-      console.log('已更新代理文件，共 ' + proxiesData.length + ' 个条目');
+      console.log(`已更新代理文件，共 ${proxiesData.length} 个条目`);
       return new Response(JSON.stringify({ success: true, count: proxiesData.length }), {
         headers: { 'Content-Type': 'application/json' }
       });
