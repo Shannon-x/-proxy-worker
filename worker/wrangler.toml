@@ -5,7 +5,7 @@ account_id = "7a4081a2d83d3f43fe6b1be1c926fd1c"
 
 # 静态资源配置 - 使用更明确的格式
 [site]
-bucket = "./public"
+bucket = "../vue-frontend/dist"
 
 # 定时任务，每10分钟执行一次
 [triggers]

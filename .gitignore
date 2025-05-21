@@ -3,4 +3,12 @@ __pycache__/
 *.pyc
 *.log
 .env
-node_modules/ 
+node_modules/
+
+# Vue
+vue-frontend/node_modules
+vue-frontend/dist
+vue-frontend/.vite
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
